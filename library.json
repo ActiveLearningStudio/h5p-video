@@ -28,6 +28,9 @@
     },
     {
       "path": "scripts/video.js"
+    },
+    {
+      "path": "scripts/brightcove.js"
     }
   ],
   "preloadedCss": [
