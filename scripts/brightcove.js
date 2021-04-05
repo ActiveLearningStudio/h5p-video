@@ -24,7 +24,13 @@ H5P.VideoBrightcove = (function ($) {
     });
 
     const videoId = getId(sources[0].path);
-    H5P.jQuery('<video-js id="curriki-brightcove" data-account="'+videoId.dataAccount+'" data-player="default" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id="" width="960" height="540"></video-js>').appendTo($placeholder);
+    let videoJsTagId = 'curriki-brightcove';
+    if (window.parent.currikiBrightcovePlayerExternal) {
+      H5P.jQuery('#' + window.parent.currikiBrightcovePlayerExternal.tagAttributes.id, window.parent.document).remove();
+      videoJsTagId = window.parent.currikiBrightcovePlayerExternal.tagAttributes.id;
+    }
+
+    H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="default" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
     $placeholder.appendTo($wrapper);
     
     self.brightcoveUrlParts = null;
@@ -43,35 +49,36 @@ H5P.VideoBrightcove = (function ($) {
       if (!$placeholder.is(':visible') || player !== undefined) {
         return;
       }
-
+      
       if (window.videojs === undefined) {
         // Load Bridghtcove library
         loadAPI(create);
-        return;
+        //return;
       }
-
-      var width = $wrapper.width();
-      if (width < 200) {
-        width = 200;
-      }
-
-      const videoId = getId(sources[0].path);
       
-      /*window.videojs.registerPlugin('currikiPlugin', function() {
-        var brightCoveplayer = this;
-      });
-      window.videojs.getPlayer('curriki-brightcove').currikiPlugin();*/
+      var intervalCount = 0;
+      var videojsloadTime = setInterval(function(e) {
+        if (window.videojs !== undefined) {
+          /*var width = $wrapper.width();
+          if (width < 200) {
+            width = 200;
+          }
+          */
+          const videoId = getId(sources[0].path);
+          player = window.videojs('curriki-brightcove');
+          player.ready(function() {
+            //self.trigger('ready');
+            self.trigger('loaded');
+          });
 
-      player = window.videojs('curriki-brightcove');
-      player.ready(function() {
-        console.log("LOADED 22 .................. ", self);
-        //self.trigger('ready');
-        self.trigger('loaded');
-      });
+          clearInterval(videojsloadTime);
+        } else if (intervalCount === 20) {
+          console.log("VideoJS not loaded. or it's taking too much load.");
+          clearInterval(videojsloadTime);
+        }
+        intervalCount++;
+      }, 1000);
 
-      console.log("player ================== ", player);
-      
-      
     };
 
     /**
@@ -158,12 +165,12 @@ H5P.VideoBrightcove = (function ($) {
      * @public
      */
     self.play = function () {
-      if (!player || !player.playVideo) {
+      if (!player || !player.play) {
         self.on('ready', self.play);
         return;
       }
 
-      player.playVideo();
+      player.play();
     };
 
     /**
@@ -173,10 +180,10 @@ H5P.VideoBrightcove = (function ($) {
      */
     self.pause = function () {
       self.off('ready', self.play);
-      if (!player || !player.pauseVideo) {
+      if (!player || !player.pause) {
         return;
       }
-      player.pauseVideo();
+      player.pause();
     };
 
     /**
