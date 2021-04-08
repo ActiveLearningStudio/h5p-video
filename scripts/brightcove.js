@@ -59,15 +59,18 @@ H5P.VideoBrightcove = (function ($) {
       var intervalCount = 0;
       var videojsloadTime = setInterval(function(e) {
         if (window.videojs !== undefined) {
-          /*var width = $wrapper.width();
+          var width = $wrapper.width();
           if (width < 200) {
             width = 200;
           }
-          */
+          
           const videoId = getId(sources[0].path);
           player = window.videojs('curriki-brightcove');
           player.ready(function() {
             //self.trigger('ready');
+            player.width(width);
+            let height = width * (9/16);
+            player.height(height);
             self.trigger('loaded');
           });
 
@@ -396,7 +399,8 @@ H5P.VideoBrightcove = (function ($) {
         height: height + 'px'
       });
 
-      //player.setSize(width, height);
+      player.width(width);
+      player.height(height);
     });
   }
 
