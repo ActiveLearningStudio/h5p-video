@@ -95,8 +95,8 @@ H5P.VideoBrightcove = (function ($) {
               self.trigger('loaded');
             });
             clearInterval(videojsloadTime);
-          } else if ( (((new Date().getTime()) - cntrStartTime.getTime()) / 1000) > 10) {
-            console.log("Player could not get ready after waiting for 10 seconds.");
+          } else if ( (((new Date().getTime()) - cntrStartTime.getTime()) / 1000) > 60) {
+            console.log("Player could not get ready after waiting for 1 minute.");
             clearInterval(videojsloadTime);
           }
         } else if (intervalCount === 20) {
