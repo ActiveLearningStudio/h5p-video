@@ -57,6 +57,7 @@ H5P.VideoBrightcove = (function ($) {
       }
       
       var intervalCount = 0;
+      let cntrStartTime = new Date();
       var videojsloadTime = setInterval(function(e) {
         if (window.videojs !== undefined) {
           var width = $wrapper.width();
@@ -66,22 +67,45 @@ H5P.VideoBrightcove = (function ($) {
           
           const videoId = getId(sources[0].path);
           player = window.videojs('curriki-brightcove');
-          player.ready(function() {
-            //self.trigger('ready');
-            player.width(width);
-            let height = width * (9/16);
-            player.height(height);
-            self.trigger('loaded');
-          });
-
-          clearInterval(videojsloadTime);
+          // when player has HAVE_ENOUGH_DATA state. https://docs.videojs.com/player#readyState
+          if (player.readyState() === 4) {
+            player.on('play', function () {
+              self.trigger('stateChange', H5P.Video.PLAYING);
+            });
+  
+            player.on('pause', function () {
+              self.trigger('stateChange', H5P.Video.PAUSED);
+            });
+  
+            
+            player.on('buffered', function () {
+              self.trigger('stateChange', H5P.Video.BUFFERING);
+            });
+  
+            player.on('ended', function () {
+              self.trigger('stateChange', H5P.Video.ENDED);
+            });
+  
+            player.ready(function() {
+              player.width(width);
+              let height = width * (9/16);
+              player.height(height);
+              player.controls(false);
+              self.trigger('ready');
+              self.trigger('loaded');
+            });
+            clearInterval(videojsloadTime);
+          } else if ( (((new Date().getTime()) - cntrStartTime.getTime()) / 1000) > 10) {
+            console.log("Player could not get ready after waiting for 10 seconds.");
+            clearInterval(videojsloadTime);
+          }
         } else if (intervalCount === 20) {
-          console.log("VideoJS not loaded. or it's taking too much load.");
+          console.log("VideoJS not loaded. or it's taking too much time to load.");
           clearInterval(videojsloadTime);
         }
         intervalCount++;
       }, 1000);
-
+      
     };
 
     /**
@@ -196,11 +220,10 @@ H5P.VideoBrightcove = (function ($) {
      * @param {Number} time
      */
     self.seek = function (time) {
-      if (!player || !player.seekTo) {
+      if (!player || !player.currentTime) {
         return;
       }
-
-      player.seekTo(time, true);
+      player.currentTime(time);
     };
 
     /**
@@ -210,11 +233,10 @@ H5P.VideoBrightcove = (function ($) {
      * @returns {Number}
      */
     self.getCurrentTime = function () {
-      if (!player || !player.getCurrentTime) {
+      if (!player || !player.currentTime) {
         return;
       }
-
-      return player.getCurrentTime();
+      return player.currentTime();
     };
 
     /**
@@ -227,7 +249,6 @@ H5P.VideoBrightcove = (function ($) {
       if (!player || !player.duration) {
         return;
       }
-
       return player.duration();
     };
 
@@ -238,11 +259,11 @@ H5P.VideoBrightcove = (function ($) {
      * @returns {Number} Between 0 and 100
      */
     self.getBuffered = function () {
-      if (!player || !player.getVideoLoadedFraction) {
+      if (!player || !player.bufferedPercent) {
         return;
       }
 
-      return player.getVideoLoadedFraction() * 100;
+      return player.bufferedPercent();
     };
 
     /**
@@ -251,11 +272,11 @@ H5P.VideoBrightcove = (function ($) {
      * @public
      */
     self.mute = function () {
-      if (!player || !player.mute) {
+      if (!player || !player.muted) {
         return;
       }
 
-      player.mute();
+      player.muted(true);
     };
 
     /**
@@ -264,11 +285,11 @@ H5P.VideoBrightcove = (function ($) {
      * @public
      */
     self.unMute = function () {
-      if (!player || !player.unMute) {
+      if (!player || !player.muted) {
         return;
       }
 
-      player.unMute();
+      player.muted(false);
     };
 
     /**
@@ -278,11 +299,11 @@ H5P.VideoBrightcove = (function ($) {
      * @returns {Boolean}
      */
     self.isMuted = function () {
-      if (!player || !player.isMuted) {
+      if (!player || !player.muted) {
         return;
       }
 
-      return player.isMuted();
+      return player.muted();
     };
 
     /**
@@ -292,11 +313,11 @@ H5P.VideoBrightcove = (function ($) {
      * @returns {Number} Between 0 and 100.
      */
     self.getVolume = function () {
-      if (!player || !player.getVolume) {
+      if (!player || !player.volume) {
         return;
       }
 
-      return player.getVolume();
+      return player.volume();
     };
 
     /**
@@ -306,11 +327,11 @@ H5P.VideoBrightcove = (function ($) {
      * @param {Number} level Between 0 and 100.
      */
     self.setVolume = function (level) {
-      if (!player || !player.setVolume) {
+      if (!player || !player.volume) {
         return;
       }
 
-      player.setVolume(level);
+      player.volume(level);
     };
 
     /**
@@ -330,11 +351,11 @@ H5P.VideoBrightcove = (function ($) {
      * @returns {Number} such as 0.25, 0.5, 1, 1.25, 1.5 and 2
      */
     self.getPlaybackRate = function () {
-      if (!player || !player.getPlaybackRate) {
+      if (!player || !player.playbackRate) {
         return;
       }
 
-      return player.getPlaybackRate();
+      return player.playbackRate();
     };
 
     /**
@@ -345,12 +366,12 @@ H5P.VideoBrightcove = (function ($) {
      * @params {Number} suggested rate that may be rounded to supported values
      */
     self.setPlaybackRate = function (newPlaybackRate) {
-      if (!player || !player.setPlaybackRate) {
+      if (!player || !player.playbackRate) {
         return;
       }
 
       playbackRate = Number(newPlaybackRate);
-      player.setPlaybackRate(playbackRate);
+      player.playbackRate(playbackRate);
     };
 
     /**
