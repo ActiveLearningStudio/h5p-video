@@ -23,14 +23,15 @@ H5P.VideoBrightcove = (function ($) {
       html: '<div id="loading-wrapper">' + l10n.loading + '</div>'
     });
 
-    const videoId = getId(sources[0].path);
+    var videoId = getId(sources[0].path);
+    window.videoIdGlobal = getId(sources[0].path);
     let videoJsTagId = 'curriki-brightcove';
     if (window.parent.currikiBrightcovePlayerExternal) {
       H5P.jQuery('#' + window.parent.currikiBrightcovePlayerExternal.tagAttributes.id, window.parent.document).remove();
       videoJsTagId = window.parent.currikiBrightcovePlayerExternal.tagAttributes.id;
     }
 
-    H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="default" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
+    H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="'+videoId.dataPlayer+'" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
     $placeholder.appendTo($wrapper);
     
     self.brightcoveUrlParts = null;
@@ -449,7 +450,8 @@ H5P.VideoBrightcove = (function ($) {
     // Has some false positives, but should cover all regular URLs that people can find
     var matches = url.match(/((?:(?:https?|ftp|file):\/\/|www\.)players.brightcove.net)\/([0-9]*)\/(\w+)\/(index.html)\?(\w+)\=([0-9]*)/i);
     if (matches && matches.length === 7) {
-      let brightcoveUrlParts = {dataAccount: matches[2], dataVideoId: matches[6]};
+      let dataPlayer = matches[3].split('_').length === 2 ? matches[3].split('_')[0] : 'default';
+      let brightcoveUrlParts = {dataAccount: matches[2], dataVideoId: matches[6], dataPlayer};
       self.brightcoveUrlParts = brightcoveUrlParts;
       return brightcoveUrlParts;
     }
@@ -470,7 +472,7 @@ H5P.VideoBrightcove = (function ($) {
     else {
       // Load the API our self
       var tag = document.createElement('script');
-      tag.src = "https://players.brightcove.net/" + self.brightcoveUrlParts.dataAccount + "/default_default/index.min.js";
+      tag.src = "https://players.brightcove.net/" + self.brightcoveUrlParts.dataAccount + "/" + window.videoIdGlobal.dataPlayer + "_default/index.min.js";
       var firstScriptTag = document.getElementsByTagName('script')[0];
       firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
       window.onBrightcoveIframeAPIReady = loaded;
