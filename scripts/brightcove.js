@@ -27,10 +27,12 @@ H5P.VideoBrightcove = (function ($) {
     window.videoIdGlobal = getId(sources[0].path);
     let videoJsTagId = 'curriki-brightcove';
     if (window.parent.currikiBrightcovePlayerExternal) {
-      H5P.jQuery('#' + window.parent.currikiBrightcovePlayerExternal.tagAttributes.id, window.parent.document).remove();
       videoJsTagId = window.parent.currikiBrightcovePlayerExternal.tagAttributes.id;
+      window.parent.document.getElementById(videoJsTagId).remove();
+      H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).show();
     }
-
+    
+    window.videoJsTagIdGlobal = videoJsTagId;
     H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="'+videoId.dataPlayer+'" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
     $placeholder.appendTo($wrapper);
     
@@ -51,6 +53,14 @@ H5P.VideoBrightcove = (function ($) {
         return;
       }
       
+      let isActivityCreateMode = window.location.pathname.split('/').filter(x => (x === 'create') || (x === 'activity')).length === 2 ? true : false;
+      let isActivityEditMode = window.location.pathname.split('/').filter(x => (x === 'edit') || (x === 'activity')).length === 2 ? true : false;
+      const hideIVDefaultControls = !(isActivityCreateMode || isActivityEditMode);
+      if (hideIVDefaultControls) {
+        H5P.jQuery('.h5p-controls').hide();
+        H5P.jQuery('.h5p-splash-wrapper').hide();
+      }
+      
       if (window.videojs === undefined) {
         // Load Bridghtcove library
         loadAPI(create);
@@ -67,9 +77,9 @@ H5P.VideoBrightcove = (function ($) {
           }
           
           const videoId = getId(sources[0].path);
-          player = window.videojs('curriki-brightcove');
+          player = window.videojs(window.videoJsTagIdGlobal);
           // when player has HAVE_ENOUGH_DATA state. https://docs.videojs.com/player#readyState
-          if (player.readyState() === 4) {
+          if (player.readyState() === 4 || player.readyState() === 2) {
             player.on('play', function () {
               self.trigger('stateChange', H5P.Video.PLAYING);
             });
@@ -91,7 +101,11 @@ H5P.VideoBrightcove = (function ($) {
               player.width(width);
               let height = width * (9/16);
               player.height(height);
-              player.controls(false);
+              if (hideIVDefaultControls) {
+                player.controls(true);
+              } else {
+                player.controls(false);
+              }
               self.trigger('ready');
               self.trigger('loaded');
             });
