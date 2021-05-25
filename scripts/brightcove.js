@@ -17,7 +17,7 @@ H5P.VideoBrightcove = (function ($) {
     var id = 'h5p-brightcove-' + numInstances;
     numInstances++;
 
-    var $wrapper = $('<div/>');
+    var $wrapper = $('<div/>').attr('id','curriki-player-wrapper');
     var $placeholder = $('<div/>', {
       id: id,
       html: '<div id="loading-wrapper">' + l10n.loading + '</div>'
@@ -26,10 +26,13 @@ H5P.VideoBrightcove = (function ($) {
     var videoId = getId(sources[0].path);
     window.videoIdGlobal = getId(sources[0].path);
     let videoJsTagId = 'curriki-brightcove';
+    var iframeDimensions = {width: 0, height: 0};
     if (window.parent.currikiBrightcovePlayerExternal) {
       videoJsTagId = window.parent.currikiBrightcovePlayerExternal.tagAttributes.id;
       window.parent.document.getElementById(videoJsTagId).remove();
       H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).show();
+      iframeDimensions.width = H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).width();
+      iframeDimensions.height = H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).height();
     }
     
     window.videoJsTagIdGlobal = videoJsTagId;
@@ -56,9 +59,11 @@ H5P.VideoBrightcove = (function ($) {
       let isActivityCreateMode = window.location.pathname.split('/').filter(x => (x === 'create') || (x === 'activity')).length === 2 ? true : false;
       let isActivityEditMode = window.location.pathname.split('/').filter(x => (x === 'edit') || (x === 'activity')).length === 2 ? true : false;
       const hideIVDefaultControls = !(isActivityCreateMode || isActivityEditMode);
-      if (hideIVDefaultControls) {
+      if (hideIVDefaultControls && window.parent.currikiBrightcovePlayerExternal) {
         H5P.jQuery('.h5p-controls').hide();
         H5P.jQuery('.h5p-splash-wrapper').hide();
+        H5P.jQuery('.h5p-content').css('border', '0px');
+        H5P.jQuery('.h5p-actions').hide();
       }
       
       if (window.videojs === undefined) {
@@ -78,8 +83,27 @@ H5P.VideoBrightcove = (function ($) {
           
           const videoId = getId(sources[0].path);
           player = window.videojs(window.videoJsTagIdGlobal);
+          player.tech_.off('dblclick');
           // when player has HAVE_ENOUGH_DATA state. https://docs.videojs.com/player#readyState
-          if (player.readyState() === 4 || player.readyState() === 2) {
+          if ( (player.readyState() === 4 || player.readyState() === 2) && !window.videoJsEventsInitiated ) {
+
+            /************[start full screen]*********************/
+            player.getChild('controlBar').removeChild('FullscreenToggle');
+            var FullscreenToggle = window.videojs.getComponent('FullscreenToggle');
+            var CurrikiFullScreenButton = window.videojs.extend(FullscreenToggle, {
+              constructor: function() {
+                FullscreenToggle.apply(this, arguments);
+                //this.addClass('vjs-fullscreen-control');
+              },
+              handleClick: function() {
+                self.parent.controls.$fullscreen.trigger('click');
+              }
+            });
+            window.videojs.registerComponent('CurrikiFullScreenButton', CurrikiFullScreenButton);
+            player.getChild('controlBar').addChild('currikiFullScreenButton', {});
+
+            /************[end full screen]*********************/
+
             player.on('play', function () {
               self.trigger('stateChange', H5P.Video.PLAYING);
             });
@@ -96,7 +120,7 @@ H5P.VideoBrightcove = (function ($) {
             player.on('ended', function () {
               self.trigger('stateChange', H5P.Video.ENDED);
             });
-  
+            
             player.ready(function() {
               player.width(width);
               let height = width * (9/16);
@@ -110,6 +134,7 @@ H5P.VideoBrightcove = (function ($) {
               self.trigger('loaded');
             });
             clearInterval(videojsloadTime);
+            window.videoJsEventsInitiated = true;
           } else if ( (((new Date().getTime()) - cntrStartTime.getTime()) / 1000) > 60) {
             console.log("Player could not get ready after waiting for 1 minute.");
             clearInterval(videojsloadTime);
@@ -428,6 +453,20 @@ H5P.VideoBrightcove = (function ($) {
 
       var width = $wrapper[0].clientWidth;
       var height = options.fit ? $wrapper[0].clientHeight : (width * (9/16));
+
+      if (window.parent.currikiBrightcovePlayerExternal && H5P.jQuery('body.h5p-fullscreen', window.parent.document).get().length > 0) {
+        width = H5P.jQuery('.h5p-fullscreen', window.parent.document).width();
+        height = options.fit ? H5P.jQuery('.h5p-fullscreen', window.parent.document).height() : (width * (9/16));
+        H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).width(width);
+        H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).height(height);
+        height = height - 30;
+      } else if (window.parent.currikiBrightcovePlayerExternal && H5P.jQuery('body.h5p-fullscreen', window.parent.document).get().length === 0) {
+        H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).width(iframeDimensions.width);
+        H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).height(iframeDimensions.height);
+        width = iframeDimensions.width;
+        height = iframeDimensions.height;
+        height = height > 200 ? height : (width * (9/16));
+      }
 
       // Set size
       $wrapper.css({
