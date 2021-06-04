@@ -10,6 +10,24 @@ H5P.VideoBrightcove = (function ($) {
    * @param {Object} l10n Localization strings
    */
   function Brightcove(sources, options, l10n) {
+    
+    var initiateStyling = function() {
+      H5P.jQuery('style', window.parent.document).filter(function () {
+        let bcStyles = H5P.jQuery(this).attr('id') === 'bc-style-vjs' ||
+        (H5P.jQuery(this).attr('class') && H5P.jQuery(this).attr('class').search(videoId.dataPlayer) !== -1);
+        if (bcStyles) {
+          return true;
+        } else {
+          return false;
+        }
+      }).appendTo(H5P.jQuery('head'));
+      H5P.jQuery('<style></style>').attr('type', 'text/css').text('.h5p-actions{display:none !important;}').appendTo(H5P.jQuery('head'));
+    }
+    
+    let isActivityCreateMode = window.location.pathname.split('/').filter(x => (x === 'create') || (x === 'activity')).length === 2 ? true : false;
+    let isActivityEditMode = window.location.pathname.split('/').filter(x => (x === 'edit') || (x === 'activity')).length === 2 ? true : false;
+    const hideIVDefaultControls = !(isActivityCreateMode || isActivityEditMode);
+    
     var self = this;
 
     var player;
@@ -29,21 +47,82 @@ H5P.VideoBrightcove = (function ($) {
     var iframeDimensions = {width: 0, height: 0};
     if (window.parent.currikiBrightcovePlayerExternal) {
       videoJsTagId = window.parent.currikiBrightcovePlayerExternal.tagAttributes.id;
-      window.parent.document.getElementById(videoJsTagId).remove();
+      //window.parent.document.getElementById(videoJsTagId).remove();
+      H5P.jQuery('#' + videoJsTagId, window.parent.document).appendTo($placeholder);
+      initiateStyling();
+      $placeholder.appendTo($wrapper);
       H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).show();
       iframeDimensions.width = H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).width();
       iframeDimensions.height = H5P.jQuery('#' + videoJsTagId + '-container .h5p-iframe-wrapper iframe', window.parent.document).height();
+
+      if (!window.brightcovePlayerInteractionsLoaded) {
+        H5P.jQuery(window.parent.currikiBrightcovePlayerExternal.el()).find('p.vjs-loading-message').remove();
+        window.parent.currikiBrightcovePlayerExternal.play();
+        window.parent.currikiBrightcovePlayerExternal.controls(true);
+        window.parent.brightcovePlayerInteractionsLoaded = true;
+      }
+
+    } else {
+      window.videoJsTagIdGlobal = videoJsTagId;
+      H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="'+videoId.dataPlayer+'" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
+      $placeholder.appendTo($wrapper);
     }
-    
-    window.videoJsTagIdGlobal = videoJsTagId;
-    H5P.jQuery('<video-js id="' + videoJsTagId + '" data-account="'+videoId.dataAccount+'" data-player="'+videoId.dataPlayer+'" data-embed="default" controls="" data-video-id="'+videoId.dataVideoId+'" data-playlist-id="" data-application-id=""></video-js>').appendTo($placeholder);
-    $placeholder.appendTo($wrapper);
     
     self.brightcoveUrlParts = null;
     self.isPlayerLoaded = false;
     
     // Optional placeholder
     // var $placeholder = $('<iframe id="' + id + '" type="text/html" width="640" height="360" src="https://www.brightcove.com/embed/' + getId(sources[0].path) + '?enablejsapi=1&origin=' + encodeURIComponent(ORIGIN) + '&autoplay=' + (options.autoplay ? 1 : 0) + '&controls=' + (options.controls ? 1 : 0) + '&disabledkb=' + (options.controls ? 0 : 1) + '&fs=0&loop=' + (options.loop ? 1 : 0) + '&rel=0&showinfo=0&iv_load_policy=3" frameborder="0"></iframe>').appendTo($wrapper);
+    
+    var initiatePLayerControlsExternalEmbed = function (videojsLib, player, width) {
+      player.getChild('controlBar').removeChild('FullscreenToggle');
+      var FullscreenToggle = videojsLib.getComponent('FullscreenToggle');
+      var CurrikiFullScreenButton = videojsLib.extend(FullscreenToggle, {
+        constructor: function() {
+          FullscreenToggle.apply(this, arguments);
+          //this.addClass('vjs-fullscreen-control');
+        },
+        handleClick: function() {
+          self.parent.controls.$fullscreen.trigger('click');
+        }
+      });
+      videojsLib.registerComponent('CurrikiFullScreenButton', CurrikiFullScreenButton);
+      player.getChild('controlBar').addChild('currikiFullScreenButton', {});
+
+      player.on('play', function () {
+        self.trigger('stateChange', H5P.Video.PLAYING);
+      });
+
+      player.on('pause', function () {
+        self.trigger('stateChange', H5P.Video.PAUSED);
+      });
+      
+      player.on('buffered', function () {
+        self.trigger('stateChange', H5P.Video.BUFFERING);
+      });
+
+      player.on('ended', function () {
+        self.trigger('stateChange', H5P.Video.ENDED);
+      });
+      
+      player.width(width);
+      let height = width * (9/16);
+      player.height(height);
+      if (hideIVDefaultControls) {
+        player.controls(true);
+      } else {
+        player.controls(false);
+      }
+
+      self.trigger('ready');
+      self.trigger('loaded');
+      
+      if (hideIVDefaultControls && window.parent.currikiBrightcovePlayerExternal) {
+        H5P.jQuery('.h5p-controls').hide();
+        H5P.jQuery('.h5p-splash-wrapper').hide();
+        H5P.jQuery('.h5p-content').css('border', '0px');
+      }
+    }
 
     /**
      * Use the Brightcove API to create a new player
@@ -51,46 +130,49 @@ H5P.VideoBrightcove = (function ($) {
      * @private
      */
     var create = function () {
+      
       H5P.jQuery('#loading-wrapper').remove();
       if (!$placeholder.is(':visible') || player !== undefined) {
         return;
       }
-      
-      let isActivityCreateMode = window.location.pathname.split('/').filter(x => (x === 'create') || (x === 'activity')).length === 2 ? true : false;
-      let isActivityEditMode = window.location.pathname.split('/').filter(x => (x === 'edit') || (x === 'activity')).length === 2 ? true : false;
-      const hideIVDefaultControls = !(isActivityCreateMode || isActivityEditMode);
-      if (hideIVDefaultControls && window.parent.currikiBrightcovePlayerExternal) {
-        H5P.jQuery('.h5p-controls').hide();
-        H5P.jQuery('.h5p-splash-wrapper').hide();
-        H5P.jQuery('.h5p-content').css('border', '0px');
-        H5P.jQuery('.h5p-actions').hide();
-      }
-      
-      if (window.videojs === undefined) {
+
+      let videojsLib = window.parent.currikiBrightcovePlayerExternal ? window.parent.videojs : window.videojs;
+      if (videojsLib === undefined) {
         // Load Bridghtcove library
         loadAPI(create);
         //return;
       }
-      
+
+      var width = $wrapper.width();
+        if (width < 200) {
+          width = 200;
+        }
+        
+      player = window.parent.currikiBrightcovePlayerExternal ? window.parent.currikiBrightcovePlayerExternal : undefined;
+      if (player) {
+        player.tech_.off('dblclick');
+        initiatePLayerControlsExternalEmbed(videojsLib, player, width);
+        return;
+      }
+
       var intervalCount = 0;
       let cntrStartTime = new Date();
       var videojsloadTime = setInterval(function(e) {
-        if (window.videojs !== undefined) {
-          var width = $wrapper.width();
-          if (width < 200) {
-            width = 200;
+        videojsLib = window.parent.currikiBrightcovePlayerExternal ? window.parent.videojs : window.videojs;
+        if (videojsLib !== undefined) {
+          if (videojsLib) {
+            player = videojsLib(window.videoJsTagIdGlobal);
           }
-          
+
           const videoId = getId(sources[0].path);
-          player = window.videojs(window.videoJsTagIdGlobal);
+          
           player.tech_.off('dblclick');
           // when player has HAVE_ENOUGH_DATA state. https://docs.videojs.com/player#readyState
           if ( (player.readyState() === 4 || player.readyState() === 2) && !window.videoJsEventsInitiated ) {
-
             /************[start full screen]*********************/
             player.getChild('controlBar').removeChild('FullscreenToggle');
-            var FullscreenToggle = window.videojs.getComponent('FullscreenToggle');
-            var CurrikiFullScreenButton = window.videojs.extend(FullscreenToggle, {
+            var FullscreenToggle = videojsLib.getComponent('FullscreenToggle');
+            var CurrikiFullScreenButton = videojsLib.extend(FullscreenToggle, {
               constructor: function() {
                 FullscreenToggle.apply(this, arguments);
                 //this.addClass('vjs-fullscreen-control');
@@ -99,10 +181,10 @@ H5P.VideoBrightcove = (function ($) {
                 self.parent.controls.$fullscreen.trigger('click');
               }
             });
-            window.videojs.registerComponent('CurrikiFullScreenButton', CurrikiFullScreenButton);
+            videojsLib.registerComponent('CurrikiFullScreenButton', CurrikiFullScreenButton);
             player.getChild('controlBar').addChild('currikiFullScreenButton', {});
 
-            /************[end full screen]*********************/
+            // /************[end full screen]*********************/
 
             player.on('play', function () {
               self.trigger('stateChange', H5P.Video.PLAYING);
@@ -122,6 +204,8 @@ H5P.VideoBrightcove = (function ($) {
             });
             
             player.ready(function() {
+              H5P.jQuery('#loading-msg').remove();
+              jQuery('#' + videoJsTagId).show();
               player.width(width);
               let height = width * (9/16);
               player.height(height);
@@ -130,6 +214,7 @@ H5P.VideoBrightcove = (function ($) {
               } else {
                 player.controls(false);
               }
+              
               self.trigger('ready');
               self.trigger('loaded');
             });
@@ -433,8 +518,24 @@ H5P.VideoBrightcove = (function ($) {
       return (track.languageCode ? new H5P.Video.LabelValue(track.displayName, track.languageCode) : null);
     };
 
+    var manageStylesOnResize = function () {
+      H5P.jQuery('style', window.parent.document).filter(function () {
+        let bcStyles = H5P.jQuery(this).attr('id') === 'bc-style-vjs' ||
+        (H5P.jQuery(this).attr('class') && H5P.jQuery(this).attr('class').search(videoId.dataPlayer) !== -1);
+        if (bcStyles) {
+          let domSelectorType = H5P.jQuery(this).attr('id') ? '#' : '.';
+          let domSelectorTypeAttr = H5P.jQuery(this).attr('id') ? 'id' : 'class';
+          H5P.jQuery(domSelectorType + H5P.jQuery(this).attr(domSelectorTypeAttr)).remove();
+          return H5P.jQuery(domSelectorType + H5P.jQuery(this).attr(domSelectorTypeAttr)) ? true : false;
+        } else {
+          return false;
+        }
+      }).appendTo(H5P.jQuery('head'));
+    }
+
     // Respond to resize events by setting the YT player size.
     self.on('resize', function () {
+      
       if (!$wrapper.is(':visible')) {
         return;
       }
@@ -476,6 +577,11 @@ H5P.VideoBrightcove = (function ($) {
 
       player.width(width);
       player.height(height);
+
+      if (window.parent.currikiBrightcovePlayerExternal) {
+        manageStylesOnResize();
+        H5P.jQuery('.h5p-splash-wrapper').remove();
+      }
     });
   }
 
